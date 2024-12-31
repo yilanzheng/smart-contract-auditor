@@ -1,46 +1,76 @@
 from typing import Dict, Any, Optional
-from autogen import AssistantAgent
-from config import DEFAULT_LLM_CONFIG
+
+import openai
+import anthropic
+from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
+
+from config import get_llm_config, DEFAULT_LLM_CONFIG
 
 class BaseAgent:
     """
-    A base agent that encapsulates shared logic for specialized agents.
-    Each derived agent should define a self.prompt string and override
-    the analyze() method if needed.
+    A base agent that encapsulates shared logic for specialized agents
+    without relying on autogen.
     """
-
     def __init__(self, name: str, llm_config: Optional[Dict[str, Any]] = None):
-        
         """
-        :param name: Name of the agent (e.g., "ReentrancyAgent").
-        :param llm_config: Dict containing LLM credentials/configs 
-                           (like model name, API key).
+        Initialize the agent with a name and optional LLM configuration.
+        
+        Args:
+            name: Agent name
+            llm_config: Can be either:
+                       - None (uses default configuration)
+                       - A complete config dict
+                       - A partial config dict (e.g., {"provider": "anthropic"})
         """
         self.name = name
-        self.llm_config = llm_config or DEFAULT_LLM_CONFIG
+        self.llm_config = get_llm_config(llm_config) if llm_config else DEFAULT_LLM_CONFIG
         self.prompt = ""  # to be set by subclasses
-        self.agent = None
-
-    def initialize_agent(self):
-        """
-        Construct the AssistantAgent from AutoGen if not already created.
-        """
-        if self.agent is None:
-            self.agent = AssistantAgent(
-                name=self.name,
-                llm_config=self.llm_config,
-                system_message=self.prompt
-            )
+        
+        # Initialize client based on provider
+        self._init_client()
+        
+    def _init_client(self):
+        """Initialize the appropriate LLM client based on provider configuration."""
+        config = self.llm_config["config_list"][0]
+        provider = config["provider"]
+        api_key = config["api_key"]
+        
+        if provider == "openai":
+            openai.api_key = api_key
+            self.client = openai.chat.completions
+        elif provider == "anthropic":
+            self.client = Anthropic(api_key=api_key)
+        else:
+            raise ValueError(f"Unknown provider '{provider}'. Must be 'openai' or 'anthropic'.")
 
     def analyze(self, contract_code: str) -> str:
-        """
-        Run the LLM-based analysis on the provided contract code.
-        Subclasses may override self.prompt to include specialized instructions.
+        return self._call_llm(system_message=self.prompt, user_message=contract_code)
 
-        :param contract_code: Solidity source code as a string.
-        :return: Agent's response as a string.
-        """
-        self.initialize_agent()
+    def _call_llm(self, system_message: str, user_message: str) -> str:
+        """Call LLM with unified interface for both providers."""
+        config = self.llm_config["config_list"][0]
         
-        return self.agent.generate_reply(messages=[{"role": "user", "content": contract_code}])
+        if config["provider"] == "openai":
+            response = self.client.create(
+                model=config["model"],
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=config["temperature"],
+                max_tokens=config["max_tokens"],
+            )
+            return response.choices[0].message.content
+            
+        else:  # anthropic
+            prompt = f"{HUMAN_PROMPT} System: {system_message}\n\nUser: {user_message}{AI_PROMPT}"
+            response = self.client.messages.create(
+                model=config["model"],
+                max_tokens=config["max_tokens"],
+                temperature=config["temperature"],
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return response.content[0].text
 
