@@ -9,8 +9,8 @@ LLM_CONFIGS = {
     "openai": {
         "api_key_env": "OPENAI_API_KEY",
         "models": {
-            "default": "gpt-4o",
-            "available": ["gpt-4o", "gpt-4o-mini"]
+            "default": "gpt-4o-2024-08-06",
+            "available": ["gpt-4o-2024-08-06", "gpt-4o-mini"]
         }
     },
     "anthropic": {
@@ -48,7 +48,7 @@ def get_llm_config(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         Complete configuration dictionary
     """
     # Start with default provider if none specified
-    provider = (config or {}).get("provider", "anthropic")
+    provider = (config or {}).get("provider", "openai")
     
     if provider not in LLM_CONFIGS:
         raise ValueError(f"Unsupported provider: {provider}")
