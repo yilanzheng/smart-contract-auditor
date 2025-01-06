@@ -5,7 +5,7 @@ import os
 import argparse
 from pathlib import Path
 from dotenv import load_dotenv
-from prompt import coordinator_prompt, static_analyzer_prompt, security_agent_prompt, business_logic_prompt, gas_optimizer_prompt
+from prompt import ENTRY_POINTS_PROMPT, ANALYZER_PROMPT, EXPLOIT_DESIGNER_PROMPT, EXPLOIT_VALIDATOR_PROMPT
 
 load_dotenv()
 # Configure the LLM
@@ -25,35 +25,42 @@ assistant_config = {
 }
 
 # Create the specialized agents
-
-# Lead Auditor - Coordinates the audit process and compiles final report
-coordinator = autogen.AssistantAgent(
-    name="Coordinator",
-    system_message=coordinator_prompt,
+# Entry Points Analyzer - Identifies potential entry points for attacks
+entry_points_analyzer = autogen.AssistantAgent(
+    name="EntryPointsAnalyzer",
+    system_message=ENTRY_POINTS_PROMPT,
     llm_config=assistant_config
 )
 
-static_analyst = autogen.AssistantAgent(
-    name="StaticAnalyst",
-    system_message=static_analyzer_prompt,
-    llm_config=assistant_config
-)   
-
-security_analyst = autogen.AssistantAgent(
-    name="SecurityAnalyst",
-    system_message=security_agent_prompt,
+# Function Analyzer - Analyzes individual functions in detail
+analyzer = autogen.AssistantAgent(
+    name="Analyzer", 
+    system_message=ANALYZER_PROMPT,
     llm_config=assistant_config
 )
 
-business_logic_analyst = autogen.AssistantAgent(
-    name="BusinessLogicAnalyst",
-    system_message=business_logic_prompt,
+# Exploit Designer - Designs potential exploits
+exploit_designer = autogen.AssistantAgent(
+    name="ExploitDesigner",
+    system_message=EXPLOIT_DESIGNER_PROMPT,
     llm_config=assistant_config
 )
 
-gas_optimizer = autogen.AssistantAgent(
-    name="GasOptimizer",
-    system_message=gas_optimizer_prompt,
+# Exploit Validator - Validates proposed exploits
+exploit_validator = autogen.AssistantAgent(
+    name="ExploitValidator",
+    system_message=EXPLOIT_VALIDATOR_PROMPT,
+    llm_config=assistant_config
+)
+
+
+reporter = autogen.AssistantAgent(
+    "reporter",
+    system_message="""
+        You are a smart contract audit reporter. You will aggregate the findings from all other agents.
+        Format the results into a clear and concise audit report.
+        List all vulnerabilities, their severity, description, and potential remediation.
+    """,
     llm_config=assistant_config
 )
 
@@ -65,43 +72,11 @@ user_proxy = autogen.ConversableAgent(
     Provide the contract code and requirements when asked."""
 )
 
-class SmartContractAuditSystem:
-    def __init__(self):
-        self.agents = {
-            "coordinator": coordinator,
-            "static_analyst": static_analyst,
-            "security_analyst": security_analyst,
-            "business_logic_analyst": business_logic_analyst,
-            "gas_optimizer": gas_optimizer,
-        }
-        
-        # Create group chat for all agents
-        self.group_chat = autogen.GroupChat(
-            agents=list(self.agents.values()),
-            messages=[],
-            max_round=12,
-        )
-        
-        # Create manager for the group chat
-        self.manager = autogen.GroupChatManager(
-            groupchat=self.group_chat,
-            llm_config={"config_list": config_list}
-        )
-
-    def audit_contract(self, contract_code):
-        
-        # Start the group chat
-        chat_result = user_proxy.initiate_chat(
-            self.manager,
-            message=f"""
-        Analyze the following smart contract code and provide a comprehensive audit report.
-        {contract_code}
-        """,
-        summary_method="reflection_with_llm",
-        )
-
-        return chat_result.summary
-
+groupchat = autogen.GroupChat(agents=[user_proxy, entry_points_analyzer, analyzer, exploit_designer, exploit_validator, reporter], 
+                              messages=[], 
+                              max_round=10,
+                              speaker_selection_method="round_robin")
+manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=assistant_config)
 
 def read_contract(file_path: str) -> str:
     try:
@@ -125,16 +100,15 @@ def main():
     
     # Run the audit
     print("Starting contract audit...")
-    audit_system = SmartContractAuditSystem()
-    report = audit_system.audit_contract(contract_code)
+    user_proxy.initiate_chat(
+        manager,
+        message=f"""
+        Analyze the following smart contract code and provide a comprehensive audit report.
+        {contract_code}
+        """
+    )
     
-    # Handle output
-    if args.output:
-        output_path = Path(args.output)
-        output_path.write_text(report)
-    else:
-        print("\n=== FINAL AUDIT REPORT ===\n")
-        print(report)
+
 
     
     print("\nAudit complete!")
