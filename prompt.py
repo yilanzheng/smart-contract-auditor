@@ -2,10 +2,12 @@ ENTRY_POINTS_PROMPT = """You are an expert Solidity code analyzer. Your task is 
 
 {contract_content}
 
-Identify all functions that have all the following characteristics:
+First, identify all functions that have all the following characteristics:
 1. Are public or external and
 2. Can modify state (not view/pure) and
 3. Are not protected by access control modifiers.
+
+Then, identify the main actors involved in the protocol. Consider different roles such as admin, user, trader, liquidity provider, etc.
 
 Return your analysis in this exact JSON format:
 {{
@@ -18,7 +20,8 @@ Return your analysis in this exact JSON format:
             "parameters": [{{"name": "string", "type": "string"}}],
             "line_number": "integer"
         }}
-    ]
+    ],
+    "actors": ["string"]
 }}
 
 Focus on functions that could be potential attack vectors. Exclude:
@@ -52,7 +55,7 @@ Function: {function_name}
 Contract: {contract_name}
 Line: {line_number}
 
-Based on the Function Analyzer's input:
+Based on the Function Analyzer's input and the list of actors identified in the Entry Points Analysis:
 1. Identify potential attack vectors
 2. Design concrete exploit scenarios
 3. Assess real-world impact
@@ -65,6 +68,12 @@ Based on the Function Analyzer's input:
     "Severity": "High/Medium/Low/Info/Best Practices",
     "Contracts": ["{contract_name}"],
     "Description":  "Detailed description of the issue. Example:\\n```solidity\\nfunction vulnerable() {{\\n    // show exact vulnerable code here\\n}}\\n```\\nExplain why this is vulnerable...",
+    "Exploit Scenarios": [
+        {{
+            "Actor": "Actor name (e.g., Liquidity Provider, Trader, User)",
+            "Scenario": "Detailed description of how this actor could exploit the vulnerability"
+        }}
+    ],
     "Recommendation": ""
 }}
 ```
@@ -79,9 +88,9 @@ Contract: {contract_name}
 Line: {line_number}
 
 Based on the Exploit Designer's input, which you can find in the previous message:
-1. Validate the exploit's feasibility
-2. Assess if the impact assessment is accurate
-3. Verify the practical exploitability
+1. Validate the exploit's feasibility from each actor's perspective, if applicable.
+2. Assess if the impact assessment is accurate for each actor
+3. Verify the practical exploitability considering the different actors' capabilities.
 4. Provide a final validation in this format:
 
 ```json
@@ -96,6 +105,12 @@ Based on the Exploit Designer's input, which you can find in the previous messag
         "Severity": "High/Medium/Low/Info/Best Practices",
         "Contracts": ["{contract_name}"],
         "Description": "Final validated description",
+        "Exploit Scenarios": [
+            {{
+                "Actor": "Actor name",
+                "Scenario": "Validated exploit scenario for this actor"
+            }}
+        ],
         "Recommendation": "string"
     }}
 }}

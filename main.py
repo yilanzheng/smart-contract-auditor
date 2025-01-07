@@ -74,7 +74,7 @@ user_proxy = autogen.ConversableAgent(
 
 groupchat = autogen.GroupChat(agents=[user_proxy, entry_points_analyzer, analyzer, exploit_designer, exploit_validator, reporter], 
                               messages=[], 
-                              max_round=10,
+                              max_round=6,
                               speaker_selection_method="round_robin")
 manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=assistant_config)
 
