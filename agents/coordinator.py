@@ -5,6 +5,10 @@ from .access_control_agent import AccessControlAgent
 from .business_logic_agent import BusinessLogicAgent
 from .overflow_agent import OverflowAgent
 from .reentrancy_agent import ReentrancyAgent
+from .entry_point_agent import EntryPointAgent
+from .analyzer_agent import AnalyzerAgent
+from .exploit_designer import ExploitDesignerAgent
+from .exploit_validator import ExploitValidatorAgent
 
 class CoordinatorAgent(BaseAgent):
     """
@@ -16,30 +20,17 @@ class CoordinatorAgent(BaseAgent):
         super().__init__(name="CoordinatorAgent", llm_config=llm_config)
 
         self.prompt = """
-You are an expert smart contract security coordinator who synthesizes findings from specialized security agents.
-
-When presented with security findings, you will create a comprehensive security report that:
-1. Prioritizes critical vulnerabilities that require immediate attention
-2. Groups related issues across different security domains (e.g., a reentrancy issue that also impacts gas costs)
-3. Assigns severity levels (Critical, High, Medium, Low) based on potential impact
-4. Provides specific, actionable recommendations for fixing each issue
-5. Highlights any patterns or common themes in the vulnerabilities
-
-Each finding in your report should include:
-- Severity Level
-- Related Security Domains
-- Description of the Issue
-- Potential Impact
-- Recommended Fix
+You are a smart contract audit reporter. You will aggregate the findings from all other agents.
+        Format the results into a clear and concise audit report.
+        List all vulnerabilities, their severity, description, and potential remediation.
 """
 
         # Initialize specialized agents
         self.agents = {
-            "Reentrancy": ReentrancyAgent(),
-            "Access Control": AccessControlAgent(),
-            "Business Logic": BusinessLogicAgent(),
-            "Gas Optimization": GasAgent(),
-            "Overflow": OverflowAgent()
+            "EntryPointAgent": EntryPointAgent(llm_config=llm_config),
+            "AnalyzerAgent": AnalyzerAgent(llm_config=llm_config),
+            "ExploitDesignerAgent": ExploitDesignerAgent(llm_config=llm_config),
+            "ExploitValidatorAgent": ExploitValidatorAgent(llm_config=llm_config),
         }
         
         # If custom llm_config is provided, update all agents
@@ -58,9 +49,11 @@ Each finding in your report should include:
         findings = {}
         for agent_name, agent in self.agents.items():
             findings[agent_name] = agent.analyze(contract_code)
-        
-        summary_prompt = self._create_summary_prompt(findings)
-        return super().analyze(summary_prompt)
+            print(f"Findings from {agent_name}: {findings[agent_name]}")
+
+
+        # summary_prompt = self._create_summary_prompt(findings)
+        # return super().analyze(summary_prompt)
 
     def _create_summary_prompt(self, findings: Dict[str, str]) -> str:
         prompt = "Please analyze the following security findings and create a comprehensive report:\n\n"
